@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: ioncorestore
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: ioncore_website_package
