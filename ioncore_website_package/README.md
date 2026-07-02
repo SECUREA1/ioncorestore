@@ -6,7 +6,7 @@ Fully operational static HTML storefront package built from the uploaded IONCORE
 - Homepage
 - Complete product marketplace
 - Category market pages
-- 20 individual product detail pages
+- 24 individual product detail pages
 - Local demo cart using browser localStorage
 - Product modal viewer
 - Demo checkout / lead capture form
