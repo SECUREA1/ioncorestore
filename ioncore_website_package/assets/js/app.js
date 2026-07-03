@@ -44,24 +44,24 @@ function fakeCheckout(e){
  cart={}; saveCart(); renderCart(); e.target.reset();
 }
 
-function setupMenuToggle(){
- const nav=document.querySelector('.nav');
- const inner=document.querySelector('.nav-inner');
- const links=document.querySelector('.nav-links');
- if(!nav || !inner || !links || document.querySelector('.menu-toggle')) return;
+function setupProductLinesToggle(){
+ const layout=document.querySelector('.market-layout');
+ const sidebar=layout?.querySelector('.sidebar');
+ if(!layout || !sidebar || !window.location.pathname.includes('/products/')) return;
  const btn=document.createElement('button');
- btn.className='btn menu-toggle';
+ btn.className='btn product-lines-toggle';
  btn.type='button';
- btn.setAttribute('aria-controls','siteMenu');
+ btn.setAttribute('aria-controls','productLines');
  btn.setAttribute('aria-expanded','false');
- links.id=links.id || 'siteMenu';
- btn.textContent='Open Menu';
+ sidebar.id=sidebar.id || 'productLines';
+ btn.textContent='Open Product Lines';
  btn.addEventListener('click',()=>{
-  const open=nav.classList.toggle('menu-open');
+  const open=layout.classList.toggle('product-lines-open');
   btn.setAttribute('aria-expanded', String(open));
-  btn.textContent=open?'Close Menu':'Open Menu';
+  btn.textContent=open?'Hide Product Lines':'Open Product Lines';
  });
- inner.insertBefore(btn, links);
+ layout.insertBefore(btn, sidebar);
 }
+
 function setupFilters(){ document.querySelectorAll('[data-filter]').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('[data-filter]').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); const f=btn.dataset.filter; renderProducts(f==='All'?PRODUCTS:PRODUCTS.filter(p=>p.category===f)); })); }
-document.addEventListener('DOMContentLoaded',()=>{setupMenuToggle(); renderProducts(); setupFilters(); updateCartCount(); renderCart();});
+document.addEventListener('DOMContentLoaded',()=>{setupProductLinesToggle(); renderProducts(); setupFilters(); updateCartCount(); renderCart();});
