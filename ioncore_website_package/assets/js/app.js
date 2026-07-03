@@ -43,5 +43,25 @@ function fakeCheckout(e){
  alert(`IONCORE demo order received for ${name}:\n\n${order}\n\nConnect a payment/backend service to turn this demo into live checkout.`);
  cart={}; saveCart(); renderCart(); e.target.reset();
 }
+
+function setupMenuToggle(){
+ const nav=document.querySelector('.nav');
+ const inner=document.querySelector('.nav-inner');
+ const links=document.querySelector('.nav-links');
+ if(!nav || !inner || !links || document.querySelector('.menu-toggle')) return;
+ const btn=document.createElement('button');
+ btn.className='btn menu-toggle';
+ btn.type='button';
+ btn.setAttribute('aria-controls','siteMenu');
+ btn.setAttribute('aria-expanded','false');
+ links.id=links.id || 'siteMenu';
+ btn.textContent='Open Menu';
+ btn.addEventListener('click',()=>{
+  const open=nav.classList.toggle('menu-open');
+  btn.setAttribute('aria-expanded', String(open));
+  btn.textContent=open?'Close Menu':'Open Menu';
+ });
+ inner.insertBefore(btn, links);
+}
 function setupFilters(){ document.querySelectorAll('[data-filter]').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('[data-filter]').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); const f=btn.dataset.filter; renderProducts(f==='All'?PRODUCTS:PRODUCTS.filter(p=>p.category===f)); })); }
-document.addEventListener('DOMContentLoaded',()=>{renderProducts(); setupFilters(); updateCartCount(); renderCart();});
+document.addEventListener('DOMContentLoaded',()=>{setupMenuToggle(); renderProducts(); setupFilters(); updateCartCount(); renderCart();});
