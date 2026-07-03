@@ -1,0 +1,13 @@
+{
+  "name": "IONCORE",
+  "short_name": "IONCORE",
+  "description": "IONCORE Energy in Motion storefront for outdoor, apparel, tech, hydration, home, tools, and bundle products.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#050705",
+  "theme_color": "#7ed321",
+  "icons": [
+    { "src": "assets/brand/ioncore-logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
