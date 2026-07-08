@@ -80,3 +80,32 @@ function openImageLightbox(source){
 }
 function closeImageLightbox(){ document.querySelector('#imageLightbox')?.classList.remove('open'); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeImageLightbox(); });
+
+function setupHouseExplorer(){
+ const canvas=document.querySelector('#houseExplorer'); if(!canvas) return;
+ const ctx=canvas.getContext('2d');
+ const shell=canvas.closest('.tour-shell');
+ const video=document.querySelector('#handVideo');
+ const state={x:0,y:1.65,z:2.8,yaw:Math.PI,pitch:-0.03,fov:520,avatar:false,keys:{},drag:false,lastX:0,lastY:0,hand:false};
+ const walls=[
+  {name:'floor',c:'#1b2419',p:[[-5,0,-5],[5,0,-5],[5,0,5],[-5,0,5]]},{name:'ceiling',c:'#10180f',p:[[-5,3,-5],[-5,3,5],[5,3,5],[5,3,-5]]},
+  {name:'back wall',c:'#22331d',p:[[-5,0,-5],[-5,3,-5],[5,3,-5],[5,0,-5]]},{name:'left wall',c:'#172415',p:[[-5,0,-5],[-5,0,5],[-5,3,5],[-5,3,-5]]},
+  {name:'right wall',c:'#182815',p:[[5,0,-5],[5,3,-5],[5,3,5],[5,0,5]]},{name:'entry wall',c:'#132012',p:[[-5,0,5],[5,0,5],[5,3,5],[-5,3,5]]},
+  {name:'hall partition',c:'#263a20',p:[[-1.25,0,-5],[-1.25,2.5,-5],[-1.25,2.5,.8],[-1.25,0,.8]]},{name:'room partition',c:'#20341c',p:[[1.6,0,-1.2],[5,0,-1.2],[5,2.6,-1.2],[1.6,2.6,-1.2]]}
+ ];
+ const edges=[[[-4.8,.05,-4.8],[4.8,.05,-4.8]],[[4.8,.05,-4.8],[4.8,.05,4.8]],[[4.8,.05,4.8],[-4.8,.05,4.8]],[[-4.8,.05,4.8],[-4.8,.05,-4.8]],[[-4.6,1.1,-5],[-2.6,1.1,-5]],[[-4.6,2.2,-5],[-2.6,2.2,-5]],[[2.3,.4,-5],[4.2,.4,-5]],[[2.3,1.8,-5],[4.2,1.8,-5]],[[0,0,-.6],[.9,0,-.6]],[[.9,0,-.6],[.9,1.1,-.6]],[[.9,1.1,-.6],[0,1.1,-.6]],[[0,1.1,-.6],[0,0,-.6]]];
+ const avatar=[[-.35,0,-2],[-.2,1.1,-2],[.2,1.1,-2],[.35,0,-2],[0,1.55,-2]];
+ function size(){const r=canvas.getBoundingClientRect(),d=window.devicePixelRatio||1;canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0)}
+ function project(pt){let [x,y,z]=pt; x-=state.x; y-=state.y; z-=state.z; const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),cp=Math.cos(state.pitch),sp=Math.sin(state.pitch); let dx=cy*x-sy*z, dz=sy*x+cy*z, dy=cp*y-sp*dz; dz=sp*y+cp*dz; if(dz<.08)return null; const w=canvas.clientWidth,h=canvas.clientHeight,s=state.fov/dz; return {x:w/2+dx*s,y:h/2-dy*s,z:dz};}
+ function poly(poly,color){const pts=poly.map(project); if(pts.some(p=>!p))return; ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.closePath(); ctx.fillStyle=color; ctx.fill(); ctx.strokeStyle='rgba(126,211,33,.28)'; ctx.stroke();}
+ function line(a,b,color='rgba(168,255,42,.8)',wide=2){const A=project(a),B=project(b); if(!A||!B)return; ctx.strokeStyle=color; ctx.lineWidth=wide; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();}
+ function draw(){const w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);ctx.fillStyle='#050805';ctx.fillRect(0,0,w,h); walls.slice().sort((a,b)=>avg(b.p)-avg(a.p)).forEach(o=>poly(o.p,o.c)); edges.forEach(e=>line(e[0],e[1])); if(state.avatar){line(avatar[0],avatar[1],'#7ed321',4);line(avatar[3],avatar[2],'#7ed321',4);line(avatar[1],avatar[2],'#7ed321',4);line(avatar[1],avatar[4],'#a8ff2a',4);line(avatar[2],avatar[4],'#a8ff2a',4);} ctx.fillStyle='rgba(126,211,33,.9)';ctx.fillRect(w/2-9,h/2-1,18,2);ctx.fillRect(w/2-1,h/2-9,2,18);}
+ function avg(p){return p.reduce((s,q)=>s+(Math.sin(state.yaw)*(q[0]-state.x)+Math.cos(state.yaw)*(q[2]-state.z)),0)/p.length}
+ function tick(){const k=state.keys,spd=.055,fx=Math.sin(state.yaw),fz=Math.cos(state.yaw),rx=Math.cos(state.yaw),rz=-Math.sin(state.yaw); if(k.w||k.ArrowUp){state.x+=fx*spd;state.z+=fz*spd} if(k.s||k.ArrowDown){state.x-=fx*spd;state.z-=fz*spd} if(k.a||k.ArrowLeft){state.x-=rx*spd;state.z-=rz*spd} if(k.d||k.ArrowRight){state.x+=rx*spd;state.z+=rz*spd} if(k.q)state.y=Math.max(.8,state.y-.035); if(k.e)state.y=Math.min(2.5,state.y+.035); state.x=Math.max(-4.4,Math.min(4.4,state.x));state.z=Math.max(-4.4,Math.min(4.4,state.z)); draw(); requestAnimationFrame(tick)}
+ canvas.addEventListener('pointerdown',e=>{state.drag=true;state.lastX=e.clientX;state.lastY=e.clientY;canvas.setPointerCapture(e.pointerId)}); canvas.addEventListener('pointerup',()=>state.drag=false); canvas.addEventListener('pointermove',e=>{if(!state.drag)return; state.yaw-=(e.clientX-state.lastX)*.006; state.pitch=Math.max(-1.1,Math.min(1.1,state.pitch+(e.clientY-state.lastY)*.004)); state.lastX=e.clientX;state.lastY=e.clientY}); canvas.addEventListener('wheel',e=>{e.preventDefault();state.fov=Math.max(260,Math.min(900,state.fov-e.deltaY*.45))},{passive:false});
+ document.addEventListener('keydown',e=>state.keys[e.key.length===1?e.key.toLowerCase():e.key]=true); document.addEventListener('keyup',e=>state.keys[e.key.length===1?e.key.toLowerCase():e.key]=false);
+ document.querySelector('#addAvatarBtn')?.addEventListener('click',()=>{state.avatar=!state.avatar}); document.querySelector('#resetTourBtn')?.addEventListener('click',()=>Object.assign(state,{x:0,y:1.65,z:2.8,yaw:Math.PI,pitch:-0.03,fov:520}));
+ document.querySelector('#handControlBtn')?.addEventListener('click',async()=>{try{const stream=await navigator.mediaDevices.getUserMedia({video:true});video.srcObject=stream;await video.play();shell.classList.add('hand-active');state.hand=true;if(window.Hands){const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});hands.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});hands.onResults(r=>{const p=r.multiHandLandmarks?.[0]?.[8]; if(p){state.yaw+=(p.x-.5)*.05;state.pitch=Math.max(-1.1,Math.min(1.1,state.pitch+(p.y-.5)*.035));}});setInterval(()=>state.hand&&hands.send({image:video}),90)}}catch(err){alert('Camera hand control is unavailable in this browser/session. Mouse and keyboard controls still work.')}});
+ window.addEventListener('resize',size); size(); tick();
+}
+document.addEventListener('DOMContentLoaded',setupHouseExplorer);
