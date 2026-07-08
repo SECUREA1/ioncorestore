@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
   <title id="title">IONCORE Hot Sides Meal Pack</title>
-  <desc id="desc">Vector storefront artwork for IONCORE Hot Sides Meal Pack.</desc>
+  <desc id="desc">Accessible graphic description: IONCORE hot sides meal pack showing potatoes, rice, beans, vegetables, sauces, and stackable hot-serving containers for pairing with main courses.</desc>
   <defs>
     <radialGradient id="glow" cx="70%" cy="15%" r="65%"><stop offset="0" stop-color="#7ed321" stop-opacity="0.65"/><stop offset="1" stop-color="#050705" stop-opacity="0"/></radialGradient>
     <linearGradient id="panel" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#172413"/><stop offset="1" stop-color="#030503"/></linearGradient>
