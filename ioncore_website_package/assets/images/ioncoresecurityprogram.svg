@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">IONCORE Security Program Concept</title>
+  <desc id="desc">Vector product concept card for the IONCORE Security Program Concept upload.</desc>
+  <defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#07120b"/><stop offset="0.55" stop-color="#142719"/><stop offset="1" stop-color="#7ed321"/></linearGradient><filter id="s"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity=".35"/></filter></defs>
+  <rect width="1200" height="800" fill="#050805"/>
+  <rect x="48" y="48" width="1104" height="704" rx="48" fill="url(#g)" filter="url(#s)"/>
+  <circle cx="955" cy="145" r="120" fill="#7ed321" opacity=".16"/>
+  <circle cx="185" cy="645" r="160" fill="#fff" opacity=".08"/>
+  <path d="M150 512c160-150 315-192 465-126 114 50 214 35 318-46 58-45 102-67 166-74v298H150z" fill="#0d1710" opacity=".78"/>
+  <rect x="155" y="134" width="890" height="105" rx="28" fill="#050805" opacity=".72"/>
+  <text x="600" y="203" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="800" fill="#7ed321">IONCORE</text>
+  <text x="600" y="420" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="800" fill="#ffffff">Security Program Concept</text>
+  <text x="600" y="490" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="#dfffd2">Connected product concept • SVG asset</text>
+</svg>
