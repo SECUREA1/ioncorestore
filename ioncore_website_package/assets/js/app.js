@@ -118,3 +118,110 @@ function setupHouseExplorer(){
  window.addEventListener('resize',size); size(); tick();
 }
 document.addEventListener('DOMContentLoaded',setupHouseExplorer);
+
+const AR_POP_HEIGHT_FEET = 6;
+const AR_POP_HEIGHT_METERS = 1.8288;
+let arPopCameraStream = null;
+
+function currentPageSnapshot(){
+ const title=document.querySelector('h1')?.textContent?.trim() || document.title.replace(/\s*\|\s*IONCORE\s*$/,'') || 'IONCORE Page';
+ const desc=document.querySelector('.lead')?.textContent?.trim() || document.querySelector('meta[name="description"]')?.content || 'View this IONCORE page as a six-foot augmented-reality popout.';
+ const hero=document.querySelector('.hero-card img, .pic img, main img, article img, img:not(.logo)');
+ return {title,desc,img:hero?.currentSrc || hero?.src || `${window.IONCORE_ASSET_PREFIX || ''}assets/brand/ioncore-logo.svg`,url:location.href};
+}
+
+function ensureArPopout(){
+ let pop=document.querySelector('#arPopout');
+ if(pop) return pop;
+ pop=document.createElement('div');
+ pop.id='arPopout';
+ pop.className='ar-popout';
+ pop.setAttribute('role','dialog');
+ pop.setAttribute('aria-modal','true');
+ pop.setAttribute('aria-label','Six-foot augmented reality page popout');
+ pop.innerHTML=`<div class="ar-stage">
+  <video class="ar-camera" playsinline muted></video>
+  <div class="ar-world" aria-hidden="true">
+   <div class="ar-floor-grid"></div>
+   <div class="ar-scale-person"><span>6 ft</span></div>
+   <article class="ar-page-panel">
+    <div class="ar-panel-top"><span class="badge">AR Pop</span><strong>6 ft / 1.83 m</strong></div>
+    <img class="ar-panel-image" alt="">
+    <div class="ar-panel-body"><h2></h2><p></p><div class="ar-url"></div></div>
+   </article>
+  </div>
+  <div class="ar-toolbar"><button class="btn solid" type="button" id="startArCameraBtn">Start Camera AR</button><button class="btn" type="button" id="tryWebXrBtn">Try WebXR</button><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
+  <p class="ar-note">The page is scaled as a six-foot-tall panel. On AR-capable mobile browsers, camera mode places it over your real room; WebXR is attempted when supported.</p>
+ </div>`;
+ document.body.appendChild(pop);
+ pop.querySelector('#closeArPopBtn').addEventListener('click',closeArPopout);
+ pop.querySelector('#startArCameraBtn').addEventListener('click',startArCamera);
+ pop.querySelector('#tryWebXrBtn').addEventListener('click',tryWebXrAr);
+ pop.addEventListener('click',e=>{ if(e.target===pop) closeArPopout(); });
+ return pop;
+}
+
+function openArPopout(productId){
+ const product=productId ? PRODUCTS.find(p=>p.id===productId) : null;
+ const page=currentPageSnapshot();
+ const productUrl=product ? new URL(`${window.IONCORE_ASSET_PREFIX || ''}products/${product.id}.html`, location.href).href : page.url;
+ const data=product ? {title:product.title,desc:product.desc,img:img(product.id),url:productUrl} : page;
+ const pop=ensureArPopout();
+ pop.querySelector('.ar-panel-image').src=data.img;
+ pop.querySelector('.ar-panel-image').alt=data.title;
+ pop.querySelector('.ar-page-panel h2').textContent=data.title;
+ pop.querySelector('.ar-page-panel p').textContent=data.desc;
+ pop.querySelector('.ar-url').textContent=data.url;
+ pop.classList.add('open');
+ document.body.classList.add('ar-popout-open');
+}
+
+async function startArCamera(){
+ const pop=ensureArPopout();
+ const video=pop.querySelector('.ar-camera');
+ try{
+  if(!arPopCameraStream){arPopCameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});}
+  video.srcObject=arPopCameraStream;
+  await video.play();
+  pop.classList.add('camera-on');
+ }catch(err){
+  alert('Camera AR is unavailable in this browser/session. The six-foot popout preview still works on screen.');
+ }
+}
+
+async function tryWebXrAr(){
+ if(!navigator.xr){alert('WebXR AR is not available in this browser. Use Start Camera AR for the six-foot popout preview.');return;}
+ try{
+  const supported=await navigator.xr.isSessionSupported('immersive-ar');
+  if(!supported){alert('This device/browser does not report immersive AR support.');return;}
+  alert('WebXR AR is supported. This static storefront uses the camera AR overlay to display the six-foot page panel without requiring a 3D engine.');
+ }catch(err){
+  alert('Unable to start WebXR AR here. Use Start Camera AR for the six-foot popout preview.');
+ }
+}
+
+function closeArPopout(){
+ const pop=document.querySelector('#arPopout');
+ pop?.classList.remove('open','camera-on');
+ document.body.classList.remove('ar-popout-open');
+ if(arPopCameraStream){arPopCameraStream.getTracks().forEach(t=>t.stop()); arPopCameraStream=null;}
+}
+
+function setupArPopButtons(){
+ if(document.querySelector('#globalArPopBtn')) return;
+ const btn=document.createElement('button');
+ btn.id='globalArPopBtn';
+ btn.className='btn solid ar-floating-btn';
+ btn.type='button';
+ btn.textContent='AR Pop 6 ft';
+ btn.setAttribute('aria-label','Pop this page out as a six-foot augmented reality panel');
+ btn.addEventListener('click',()=>openArPopout());
+ document.body.appendChild(btn);
+ document.querySelectorAll('button[onclick^="openProduct("]').forEach(button=>{
+  const match=button.getAttribute('onclick')?.match(/openProduct\('([^']+)'\)/);
+  if(match){button.textContent='AR Pop';button.removeAttribute('onclick');button.addEventListener('click',()=>openArPopout(match[1]));}
+ });
+}
+
+document.addEventListener('DOMContentLoaded',setupArPopButtons);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeArPopout(); });
