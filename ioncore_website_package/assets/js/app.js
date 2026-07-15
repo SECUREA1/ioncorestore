@@ -150,14 +150,25 @@ function ensureArPopout(){
     <div class="ar-panel-body"><h2></h2><p></p><div class="ar-url"></div></div>
    </article>
   </div>
-  <div class="ar-toolbar"><button class="btn solid" type="button" id="startArCameraBtn">Start Camera AR</button><button class="btn" type="button" id="tryWebXrBtn">Try WebXR</button><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
-  <p class="ar-note">The page is scaled as a six-foot-tall panel. On AR-capable mobile browsers, camera mode places it over your real room; WebXR is attempted when supported.</p>
+  <div class="ar-toolbar"><button class="btn solid" type="button" id="startArCameraBtn">Accept / Start AR</button><button class="btn" type="button" id="tryWebXrBtn">Check WebXR</button><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
+  <p class="ar-note">Accepted AR Pop uses your rear camera when allowed and overlays this page as a locked six-foot-tall in-room panel (6 ft / ${AR_POP_HEIGHT_METERS} m).</p>
  </div>`;
  document.body.appendChild(pop);
  pop.querySelector('#closeArPopBtn').addEventListener('click',closeArPopout);
- pop.querySelector('#startArCameraBtn').addEventListener('click',startArCamera);
+ pop.querySelector('#startArCameraBtn').addEventListener('click',async()=>{
+  const accepted=window.confirm(`Start camera AR and show this page ${AR_POP_HEIGHT_FEET} feet tall in person?`);
+  if(accepted) await startArCamera();
+ });
  pop.querySelector('#tryWebXrBtn').addEventListener('click',tryWebXrAr);
  pop.addEventListener('click',e=>{ if(e.target===pop) closeArPopout(); });
+ return pop;
+}
+
+async function requestArPopout(productId){
+ const accepted=window.confirm(`AR Pop will ask for camera permission and place this page as a ${AR_POP_HEIGHT_FEET}-foot-tall in-room panel. Continue?`);
+ if(!accepted) return;
+ const pop=openArPopout(productId);
+ await startArCamera();
  return pop;
 }
 
@@ -174,6 +185,7 @@ function openArPopout(productId){
  pop.querySelector('.ar-url').textContent=data.url;
  pop.classList.add('open');
  document.body.classList.add('ar-popout-open');
+ return pop;
 }
 
 async function startArCamera(){
@@ -215,11 +227,11 @@ function setupArPopButtons(){
  btn.type='button';
  btn.textContent='AR Pop 6 ft';
  btn.setAttribute('aria-label','Pop this page out as a six-foot augmented reality panel');
- btn.addEventListener('click',()=>openArPopout());
+ btn.addEventListener('click',()=>requestArPopout());
  document.body.appendChild(btn);
  document.querySelectorAll('button[onclick^="openProduct("]').forEach(button=>{
   const match=button.getAttribute('onclick')?.match(/openProduct\('([^']+)'\)/);
-  if(match){button.textContent='AR Pop';button.removeAttribute('onclick');button.addEventListener('click',()=>openArPopout(match[1]));}
+  if(match){button.textContent='AR Pop';button.removeAttribute('onclick');button.addEventListener('click',()=>requestArPopout(match[1]));}
  });
 }
 
