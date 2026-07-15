@@ -122,6 +122,7 @@ document.addEventListener('DOMContentLoaded',setupHouseExplorer);
 const AR_POP_HEIGHT_FEET = 6;
 const AR_POP_HEIGHT_METERS = 1.8288;
 let arPopCameraStream = null;
+let arXrSession = null;
 
 function currentPageSnapshot(){
  const title=document.querySelector('h1')?.textContent?.trim() || document.title.replace(/\s*\|\s*IONCORE\s*$/,'') || 'IONCORE Page';
@@ -150,8 +151,8 @@ function ensureArPopout(){
     <div class="ar-panel-body"><h2></h2><p></p><div class="ar-url"></div></div>
    </article>
   </div>
-  <div class="ar-toolbar"><button class="btn solid" type="button" id="startArCameraBtn">Accept / Start AR</button><button class="btn" type="button" id="tryWebXrBtn">Check WebXR</button><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
-  <p class="ar-note">Accepted AR Pop uses your rear camera when allowed and overlays this page as a locked six-foot-tall in-room panel (6 ft / ${AR_POP_HEIGHT_METERS} m).</p>
+  <div class="ar-toolbar"><button class="btn solid" type="button" id="tryWebXrBtn">Place In Room</button><button class="btn" type="button" id="startArCameraBtn">Camera Preview</button><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
+  <p class="ar-note">Tap Place In Room on Android Chrome/WebXR to put this picture into your room. Camera Preview remains available for browsers without WebXR.</p>
  </div>`;
  document.body.appendChild(pop);
  pop.querySelector('#closeArPopBtn').addEventListener('click',closeArPopout);
@@ -165,11 +166,9 @@ function ensureArPopout(){
 }
 
 async function requestArPopout(productId){
- const accepted=window.confirm(`AR Pop will ask for camera permission and place this page as a ${AR_POP_HEIGHT_FEET}-foot-tall in-room panel. Continue?`);
+ const accepted=window.confirm(`AR Pop will open the room placement controls for a ${AR_POP_HEIGHT_FEET}-foot-tall picture panel. Continue?`);
  if(!accepted) return;
- const pop=openArPopout(productId);
- await startArCamera();
- return pop;
+ return openArPopout(productId);
 }
 
 function openArPopout(productId){
@@ -202,14 +201,60 @@ async function startArCamera(){
 }
 
 async function tryWebXrAr(){
- if(!navigator.xr){alert('WebXR AR is not available in this browser. Use Start Camera AR for the six-foot popout preview.');return;}
+ if(!navigator.xr){alert('WebXR AR is not available in this browser. Use Camera Preview instead.');return;}
  try{
   const supported=await navigator.xr.isSessionSupported('immersive-ar');
-  if(!supported){alert('This device/browser does not report immersive AR support.');return;}
-  alert('WebXR AR is supported. This static storefront uses the camera AR overlay to display the six-foot page panel without requiring a 3D engine.');
+  if(!supported){alert('This device/browser does not report immersive AR support. Use Camera Preview instead.');return;}
+  await startRoomArSession();
  }catch(err){
-  alert('Unable to start WebXR AR here. Use Start Camera AR for the six-foot popout preview.');
+  alert('Unable to start room AR here. Make sure you are using Android Chrome over HTTPS, then use Camera Preview if AR is still unavailable.');
  }
+}
+
+function makeArTextureCanvas(){
+ const pop=ensureArPopout();
+ const title=pop.querySelector('.ar-page-panel h2')?.textContent || document.title;
+ const desc=pop.querySelector('.ar-page-panel p')?.textContent || '';
+ const image=pop.querySelector('.ar-panel-image');
+ const canvas=document.createElement('canvas'); canvas.width=768; canvas.height=1280;
+ const ctx=canvas.getContext('2d');
+ ctx.fillStyle='#071007'; ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.strokeStyle='#7ed321'; ctx.lineWidth=18; ctx.strokeRect(9,9,canvas.width-18,canvas.height-18);
+ if(image?.complete && image.naturalWidth){
+  const h=520, ratio=Math.max(canvas.width/image.naturalWidth,h/image.naturalHeight), w=image.naturalWidth*ratio, ih=image.naturalHeight*ratio;
+  ctx.drawImage(image,(canvas.width-w)/2,80+(h-ih)/2,w,ih);
+ }
+ ctx.fillStyle='rgba(0,0,0,.72)'; ctx.fillRect(0,600,canvas.width,680);
+ ctx.fillStyle='#a8ff2a'; ctx.font='800 56px Arial'; wrapCanvasText(ctx,title.toUpperCase(),48,690,canvas.width-96,64,3);
+ ctx.fillStyle='#eaffdf'; ctx.font='32px Arial'; wrapCanvasText(ctx,desc,48,910,canvas.width-96,44,6);
+ ctx.fillStyle='#7ed321'; ctx.font='700 28px Arial'; ctx.fillText('IONCORE AR • 6 FT ROOM POP',48,1190);
+ return canvas;
+}
+function wrapCanvasText(ctx,text,x,y,maxWidth,lineHeight,maxLines){
+ const words=String(text).split(/\s+/); let line='', lines=0;
+ words.forEach(word=>{const test=line?line+' '+word:word; if(ctx.measureText(test).width>maxWidth && line){ctx.fillText(line,x,y); y+=lineHeight; line=word; lines++;}else line=test;});
+ if(line && lines<maxLines) ctx.fillText(line,x,y);
+}
+function mat4Multiply(a,b){const o=new Float32Array(16);for(let r=0;r<4;r++)for(let c=0;c<4;c++)o[c+r*4]=a[r*4]*b[c]+a[r*4+1]*b[c+4]+a[r*4+2]*b[c+8]+a[r*4+3]*b[c+12];return o;}
+function mat4Scale(m,x,y,z){const s=new Float32Array([x,0,0,0,0,y,0,0,0,0,z,0,0,0,0,1]);return mat4Multiply(m,s);}
+async function startRoomArSession(){
+ const session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['hit-test','dom-overlay'],domOverlay:{root:document.body}});
+ arXrSession=session;
+ const canvas=document.createElement('canvas'); canvas.className='ar-xr-canvas'; document.body.appendChild(canvas);
+ const gl=canvas.getContext('webgl',{xrCompatible:true,alpha:true});
+ const program=createArProgram(gl), pos=gl.getAttribLocation(program,'aPos'), uv=gl.getAttribLocation(program,'aUv'), mvpLoc=gl.getUniformLocation(program,'uMvp');
+ const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-0.5,0,0,0,1, .5,0,0,1,1, -.5,1,0,0,0, .5,1,0,1,0]),gl.STATIC_DRAW);
+ const tex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,tex); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,makeArTextureCanvas());
+ await gl.makeXRCompatible(); session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl)});
+ const ref=await session.requestReferenceSpace('local'); let hitSource=null, model=null;
+ try{const viewer=await session.requestReferenceSpace('viewer'); hitSource=await session.requestHitTestSource({space:viewer});}catch(e){}
+ session.addEventListener('select',()=>{}); session.addEventListener('end',()=>{canvas.remove(); if(arXrSession===session) arXrSession=null;});
+ session.requestAnimationFrame(function frame(t,frame){session.requestAnimationFrame(frame); const pose=frame.getViewerPose(ref); if(!pose)return; if(!model){const hits=hitSource?frame.getHitTestResults(hitSource):[]; model=hits[0]?.getPose(ref)?.transform.matrix || new XRRigidTransform({x:0,y:0,z:-2}).matrix; model=mat4Scale(model,1.1,AR_POP_HEIGHT_METERS,1);} gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer); gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT); gl.useProgram(program); gl.bindBuffer(gl.ARRAY_BUFFER,buf); gl.enableVertexAttribArray(pos); gl.vertexAttribPointer(pos,3,gl.FLOAT,false,20,0); gl.enableVertexAttribArray(uv); gl.vertexAttribPointer(uv,2,gl.FLOAT,false,20,12); for(const view of pose.views){const vp=session.renderState.baseLayer.getViewport(view); gl.viewport(vp.x,vp.y,vp.width,vp.height); gl.uniformMatrix4fv(mvpLoc,false,mat4Multiply(view.projectionMatrix,mat4Multiply(view.transform.inverse.matrix,model))); gl.drawArrays(gl.TRIANGLE_STRIP,0,4);}});
+}
+function createArProgram(gl){
+ const vs='attribute vec3 aPos;attribute vec2 aUv;uniform mat4 uMvp;varying vec2 vUv;void main(){vUv=aUv;gl_Position=uMvp*vec4(aPos,1.0);}';
+ const fs='precision mediump float;varying vec2 vUv;uniform sampler2D uTex;void main(){gl_FragColor=texture2D(uTex,vUv);}';
+ const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);return x}; const p=gl.createProgram(); gl.attachShader(p,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p); return p;
 }
 
 function closeArPopout(){
@@ -217,6 +262,7 @@ function closeArPopout(){
  pop?.classList.remove('open','camera-on');
  document.body.classList.remove('ar-popout-open');
  if(arPopCameraStream){arPopCameraStream.getTracks().forEach(t=>t.stop()); arPopCameraStream=null;}
+ if(arXrSession){const session=arXrSession; arXrSession=null; session.end().catch(()=>{});}
 }
 
 function setupArPopButtons(){
