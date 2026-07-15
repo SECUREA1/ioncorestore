@@ -133,7 +133,15 @@ function isSafariBrowser(){
 }
 
 function isAppleArFallback(){
- return isIOSDevice() && isSafariBrowser();
+ // Every browser on iPhone/iPad uses WebKit and cannot reliably start WebXR immersive-ar.
+ // Treat Chrome/Firefox/Edge on iOS the same as Safari and open the camera-backed Apple mode.
+ return isIOSDevice();
+}
+
+function getArPlatform(){
+ if(isAppleArFallback()) return 'apple';
+ if(/Android/i.test(navigator.userAgent)) return 'android';
+ return 'desktop';
 }
 
 function currentPageSnapshot(){
@@ -164,8 +172,9 @@ function ensureArPopout(){
    </article>
   </div>
   <div class="ar-toolbar"><button class="btn solid" type="button" id="tryWebXrBtn">Place In Room</button><button class="btn" type="button" id="startArCameraBtn">Camera Preview</button><a class="btn ar-quicklook" id="quickLookArBtn" rel="ar" hidden>View In AR</a><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
+  <div class="ar-placement-dot" aria-hidden="true"></div>
   <div class="ar-banner" role="status" aria-live="polite"><strong>AR Preview Available</strong><span>Open Camera Preview to see this product card in your space.</span></div>
-  <p class="ar-note">Tap Place In Room on Android Chrome/WebXR to put this picture into your room. Camera Preview remains available for browsers without WebXR.</p>
+  <p class="ar-note">Tap Place In Room on Android Chrome/WebXR. On iPhone, Apple Camera Pop uses the rear camera, touch placement, and motion tilt because Safari does not expose WebXR AR.</p>
  </div>`;
  document.body.appendChild(pop);
  pop.querySelector('#closeArPopBtn').addEventListener('click',closeArPopout);
@@ -194,6 +203,7 @@ function openArPopout(productId){
  pop.classList.add('open');
  document.body.classList.add('ar-popout-open');
  if(isAppleArFallback()) startArCamera();
+ enableAppleArControls(pop);
  return pop;
 }
 
@@ -205,10 +215,9 @@ function configureArMode(pop,data){
  const banner=pop.querySelector('.ar-banner');
  webXrBtn.hidden=isApple;
  cameraBtn.classList.toggle('solid',isApple);
- banner.innerHTML=isApple ? '<strong>📱 Camera Preview Mode Active</strong><span>Full AR placement is available on Android Chrome/WebXR devices.</span>' : '<strong>AR Preview Available</strong><span>Use WebXR on Android Chrome or Camera Preview on this device.</span>';
- const usdz=data.url.replace(/\.html(?:[?#].*)?$/i,'.usdz');
- quickLook.href=usdz;
- quickLook.hidden=!isApple;
+ banner.innerHTML=isApple ? '<strong>Apple Camera Pop Ready</strong><span>iPhone uses the rear camera preview with touch placement and motion tilt. True WebXR room placement is available on Android Chrome.</span>' : '<strong>AR Preview Available</strong><span>Use WebXR on Android Chrome or Camera Preview on this device.</span>';
+ quickLook.hidden=true;
+ quickLook.removeAttribute('href');
  pop.classList.toggle('apple-ar-fallback',isApple);
 }
 
@@ -216,20 +225,46 @@ async function startArCamera(){
  const pop=ensureArPopout();
  const video=pop.querySelector('.ar-camera');
  try{
-  if(!arPopCameraStream){arPopCameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});}
+  if(!navigator.mediaDevices?.getUserMedia) throw new Error('Camera API unavailable');
+  if(!arPopCameraStream){
+   arPopCameraStream=await navigator.mediaDevices.getUserMedia({
+    video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},aspectRatio:{ideal:16/9}},
+    audio:false
+   });
+   const [track]=arPopCameraStream.getVideoTracks();
+   const caps=track?.getCapabilities?.() || {};
+   if(caps.focusMode?.includes('continuous')) track.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{});
+  }
   video.srcObject=arPopCameraStream;
   await video.play();
   pop.classList.add('camera-on');
+  showArBanner(getArPlatform()==='apple'?'Apple Camera Pop Active':'Camera Preview Active',getArPlatform()==='apple'?'Move your iPhone and drag the card to line it up in the room.':'Camera preview is active; WebXR placement remains available on supported Android Chrome devices.');
  }catch(err){
-  alert('Camera AR is unavailable in this browser/session. The six-foot popout preview still works on screen.');
+  showArBanner('Camera Blocked','Allow camera access over HTTPS to use room preview. The six-foot popout still works on screen.');
  }
 }
 
+function enableAppleArControls(pop){
+ if(pop.dataset.appleControlsReady) return;
+ pop.dataset.appleControlsReady='true';
+ const panel=pop.querySelector('.ar-page-panel');
+ const stage=pop.querySelector('.ar-stage');
+ let drag=false,startX=0,startY=0,tx=0,ty=3,scale=1;
+ function render(){panel.style.setProperty('--arTx',tx+'px');panel.style.setProperty('--arTy',ty+'vh');panel.style.setProperty('--arScale',scale);}
+ stage.addEventListener('pointerdown',e=>{if(!isAppleArFallback())return;drag=true;startX=e.clientX-tx;startY=e.clientY-(ty*innerHeight/100);stage.setPointerCapture?.(e.pointerId);});
+ stage.addEventListener('pointermove',e=>{if(!drag)return;tx=e.clientX-startX;ty=((e.clientY-startY)/innerHeight)*100;render();});
+ stage.addEventListener('pointerup',()=>{drag=false;});
+ stage.addEventListener('wheel',e=>{if(!isAppleArFallback())return;e.preventDefault();scale=Math.max(.72,Math.min(1.35,scale-(e.deltaY*.001)));render();},{passive:false});
+ window.addEventListener('deviceorientation',e=>{if(!pop.classList.contains('open')||!isAppleArFallback())return;const y=Math.max(-10,Math.min(10,e.gamma||0));const x=Math.max(-8,Math.min(8,e.beta||0));panel.style.setProperty('--arTiltY',y+'deg');panel.style.setProperty('--arTiltX',(-x/2)+'deg');});
+ render();
+}
+
 async function tryWebXrAr(){
- if(!navigator.xr){showArBanner('📱 Camera Preview Mode Active','Full AR placement is available on Android Chrome/WebXR devices.');await startArCamera();return;}
+ if(isAppleArFallback()){showArBanner('Apple Camera Pop Active','iPhone browsers do not expose WebXR immersive AR, so this uses the best available Apple camera mode.');await startArCamera();return;}
+ if(!navigator.xr){showArBanner('Camera Preview Mode Active','WebXR was not found in this browser. Android Chrome supports full room placement.');await startArCamera();return;}
  try{
   const supported=await navigator.xr.isSessionSupported('immersive-ar');
-  if(!supported){showArBanner('📱 Camera Preview Mode Active','Full AR placement is available on Android Chrome/WebXR devices.');await startArCamera();return;}
+  if(!supported){showArBanner('Camera Preview Mode Active','Immersive WebXR AR is not supported here. Try Android Chrome for full room placement.');await startArCamera();return;}
   await startRoomArSession();
  }catch(err){
   showArBanner('Camera Preview Mode Active','Unable to start WebXR here, so the camera preview is showing instead.');
@@ -269,7 +304,7 @@ function wrapCanvasText(ctx,text,x,y,maxWidth,lineHeight,maxLines){
 function mat4Multiply(a,b){const o=new Float32Array(16);for(let r=0;r<4;r++)for(let c=0;c<4;c++)o[c+r*4]=a[r*4]*b[c]+a[r*4+1]*b[c+4]+a[r*4+2]*b[c+8]+a[r*4+3]*b[c+12];return o;}
 function mat4Scale(m,x,y,z){const s=new Float32Array([x,0,0,0,0,y,0,0,0,0,z,0,0,0,0,1]);return mat4Multiply(m,s);}
 async function startRoomArSession(){
- const session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['hit-test','dom-overlay'],domOverlay:{root:document.body}});
+ const session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['hit-test','local-floor','dom-overlay'],domOverlay:{root:document.body}});
  arXrSession=session;
  const canvas=document.createElement('canvas'); canvas.className='ar-xr-canvas'; document.body.appendChild(canvas);
  const gl=canvas.getContext('webgl',{xrCompatible:true,alpha:true});
