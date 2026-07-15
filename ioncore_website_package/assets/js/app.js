@@ -124,6 +124,18 @@ const AR_POP_HEIGHT_METERS = 1.8288;
 let arPopCameraStream = null;
 let arXrSession = null;
 
+function isIOSDevice(){
+ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function isSafariBrowser(){
+ return /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(navigator.userAgent);
+}
+
+function isAppleArFallback(){
+ return isIOSDevice() && isSafariBrowser();
+}
+
 function currentPageSnapshot(){
  const title=document.querySelector('h1')?.textContent?.trim() || document.title.replace(/\s*\|\s*IONCORE\s*$/,'') || 'IONCORE Page';
  const desc=document.querySelector('.lead')?.textContent?.trim() || document.querySelector('meta[name="description"]')?.content || 'View this IONCORE page as a six-foot augmented-reality popout.';
@@ -151,23 +163,19 @@ function ensureArPopout(){
     <div class="ar-panel-body"><h2></h2><p></p><div class="ar-url"></div></div>
    </article>
   </div>
-  <div class="ar-toolbar"><button class="btn solid" type="button" id="tryWebXrBtn">Place In Room</button><button class="btn" type="button" id="startArCameraBtn">Camera Preview</button><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
+  <div class="ar-toolbar"><button class="btn solid" type="button" id="tryWebXrBtn">Place In Room</button><button class="btn" type="button" id="startArCameraBtn">Camera Preview</button><a class="btn ar-quicklook" id="quickLookArBtn" rel="ar" hidden>View In AR</a><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
+  <div class="ar-banner" role="status" aria-live="polite"><strong>AR Preview Available</strong><span>Open Camera Preview to see this product card in your space.</span></div>
   <p class="ar-note">Tap Place In Room on Android Chrome/WebXR to put this picture into your room. Camera Preview remains available for browsers without WebXR.</p>
  </div>`;
  document.body.appendChild(pop);
  pop.querySelector('#closeArPopBtn').addEventListener('click',closeArPopout);
- pop.querySelector('#startArCameraBtn').addEventListener('click',async()=>{
-  const accepted=window.confirm(`Start camera AR and show this page ${AR_POP_HEIGHT_FEET} feet tall in person?`);
-  if(accepted) await startArCamera();
- });
+ pop.querySelector('#startArCameraBtn').addEventListener('click',startArCamera);
  pop.querySelector('#tryWebXrBtn').addEventListener('click',tryWebXrAr);
  pop.addEventListener('click',e=>{ if(e.target===pop) closeArPopout(); });
  return pop;
 }
 
 async function requestArPopout(productId){
- const accepted=window.confirm(`AR Pop will open the room placement controls for a ${AR_POP_HEIGHT_FEET}-foot-tall picture panel. Continue?`);
- if(!accepted) return;
  return openArPopout(productId);
 }
 
@@ -182,9 +190,26 @@ function openArPopout(productId){
  pop.querySelector('.ar-page-panel h2').textContent=data.title;
  pop.querySelector('.ar-page-panel p').textContent=data.desc;
  pop.querySelector('.ar-url').textContent=data.url;
+ configureArMode(pop,data);
  pop.classList.add('open');
  document.body.classList.add('ar-popout-open');
+ if(isAppleArFallback()) startArCamera();
  return pop;
+}
+
+function configureArMode(pop,data){
+ const isApple=isAppleArFallback();
+ const webXrBtn=pop.querySelector('#tryWebXrBtn');
+ const cameraBtn=pop.querySelector('#startArCameraBtn');
+ const quickLook=pop.querySelector('#quickLookArBtn');
+ const banner=pop.querySelector('.ar-banner');
+ webXrBtn.hidden=isApple;
+ cameraBtn.classList.toggle('solid',isApple);
+ banner.innerHTML=isApple ? '<strong>📱 Camera Preview Mode Active</strong><span>Full AR placement is available on Android Chrome/WebXR devices.</span>' : '<strong>AR Preview Available</strong><span>Use WebXR on Android Chrome or Camera Preview on this device.</span>';
+ const usdz=data.url.replace(/\.html(?:[?#].*)?$/i,'.usdz');
+ quickLook.href=usdz;
+ quickLook.hidden=!isApple;
+ pop.classList.toggle('apple-ar-fallback',isApple);
 }
 
 async function startArCamera(){
@@ -201,14 +226,20 @@ async function startArCamera(){
 }
 
 async function tryWebXrAr(){
- if(!navigator.xr){alert('WebXR AR is not available in this browser. Use Camera Preview instead.');return;}
+ if(!navigator.xr){showArBanner('📱 Camera Preview Mode Active','Full AR placement is available on Android Chrome/WebXR devices.');await startArCamera();return;}
  try{
   const supported=await navigator.xr.isSessionSupported('immersive-ar');
-  if(!supported){alert('This device/browser does not report immersive AR support. Use Camera Preview instead.');return;}
+  if(!supported){showArBanner('📱 Camera Preview Mode Active','Full AR placement is available on Android Chrome/WebXR devices.');await startArCamera();return;}
   await startRoomArSession();
  }catch(err){
-  alert('Unable to start room AR here. Make sure you are using Android Chrome over HTTPS, then use Camera Preview if AR is still unavailable.');
+  showArBanner('Camera Preview Mode Active','Unable to start WebXR here, so the camera preview is showing instead.');
+  await startArCamera();
  }
+}
+
+function showArBanner(title,message){
+ const banner=ensureArPopout().querySelector('.ar-banner');
+ banner.innerHTML=`<strong>${title}</strong><span>${message}</span>`;
 }
 
 function makeArTextureCanvas(){
