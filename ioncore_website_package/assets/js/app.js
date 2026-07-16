@@ -10,7 +10,7 @@ function card(p){
     <div class="pic"><img src="${img(p.id)}" alt="${p.title}"></div>
     <div class="card-body"><span class="badge">${p.category}</span><h3>${p.title}</h3><div class="green">${p.tag}</div><p>${p.desc}</p>
     <h4>Package includes</h4><ul>${(p.contents || p.features).map(f=>`<li>${f}</li>`).join('')}</ul><div class="price">${money(p.price)}</div>
-    <div class="card-actions"><button class="btn" type="button" onclick="openProduct('${p.id}')">AR Pop</button><a class="btn" href="${window.IONCORE_ASSET_PREFIX || ''}products/${p.id}.html">Page</a><button class="btn solid" onclick="addToCart('${p.id}')">Add</button></div></div>
+    <div class="card-actions"><button class="btn" type="button" onclick="openProduct('${p.id}')">Scan Floor</button><a class="btn" href="${window.IONCORE_ASSET_PREFIX || ''}products/${p.id}.html">Page</a><button class="btn solid" onclick="addToCart('${p.id}')">Add</button></div></div>
   </article>`;
 }
 function renderProducts(list){ const root=document.querySelector('#productGrid'); if(root){ const initial=root.dataset.category; const categories=root.dataset.categories?.split(',').map(x=>x.trim()).filter(Boolean); const items=list || (categories?.length ? PRODUCTS.filter(p=>categories.includes(p.category)) : (initial ? PRODUCTS.filter(p=>p.category===initial) : PRODUCTS)); root.innerHTML=items.map(card).join(''); } }
@@ -81,43 +81,6 @@ function openImageLightbox(source){
 function closeImageLightbox(){ document.querySelector('#imageLightbox')?.classList.remove('open'); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeImageLightbox(); });
 
-function setupHouseExplorer(){
- const canvas=document.querySelector('#houseExplorer'); if(!canvas) return;
- const ctx=canvas.getContext('2d');
- const shell=canvas.closest('.tour-shell');
- const video=document.querySelector('#handVideo');
- const state={x:0,y:1.65,z:2.8,yaw:Math.PI,pitch:-0.03,fov:520,avatar:false,keys:{},drag:false,lastX:0,lastY:0,hand:false,model:'all',spin:0};
- const walls=[
-  {name:'floor',c:'#1b2419',p:[[-5,0,-5],[5,0,-5],[5,0,5],[-5,0,5]]},{name:'ceiling',c:'#10180f',p:[[-5,3,-5],[-5,3,5],[5,3,5],[5,3,-5]]},
-  {name:'back wall',c:'#22331d',p:[[-5,0,-5],[-5,3,-5],[5,3,-5],[5,0,-5]]},{name:'left wall',c:'#172415',p:[[-5,0,-5],[-5,0,5],[-5,3,5],[-5,3,-5]]},
-  {name:'right wall',c:'#182815',p:[[5,0,-5],[5,3,-5],[5,3,5],[5,0,5]]},{name:'entry wall',c:'#132012',p:[[-5,0,5],[5,0,5],[5,3,5],[-5,3,5]]},
-  {name:'hall partition',c:'#263a20',p:[[-1.25,0,-5],[-1.25,2.5,-5],[-1.25,2.5,.8],[-1.25,0,.8]]},{name:'room partition',c:'#20341c',p:[[1.6,0,-1.2],[5,0,-1.2],[5,2.6,-1.2],[1.6,2.6,-1.2]]}
- ];
- const edges=[[[-4.8,.05,-4.8],[4.8,.05,-4.8]],[[4.8,.05,-4.8],[4.8,.05,4.8]],[[4.8,.05,4.8],[-4.8,.05,4.8]],[[-4.8,.05,4.8],[-4.8,.05,-4.8]],[[-4.6,1.1,-5],[-2.6,1.1,-5]],[[-4.6,2.2,-5],[-2.6,2.2,-5]],[[2.3,.4,-5],[4.2,.4,-5]],[[2.3,1.8,-5],[4.2,1.8,-5]],[[0,0,-.6],[.9,0,-.6]],[[.9,0,-.6],[.9,1.1,-.6]],[[.9,1.1,-.6],[0,1.1,-.6]],[[0,1.1,-.6],[0,0,-.6]]];
- const avatar=[[-.35,0,-2],[-.2,1.1,-2],[.2,1.1,-2],[.35,0,-2],[0,1.55,-2]];
- const displays=[
-  {id:'drone',label:'X1 Drone',pos:[-3.15,.85,-3.3],color:'#7ed321'},
-  {id:'toolcore',label:'Tool Core',pos:[3.05,.72,-3.25],color:'#a8ff2a'},
-  {id:'hydration',label:'Hydration Tower',pos:[-3.25,.72,.85],color:'#45d7ff'},
-  {id:'lamp',label:'Field Lamp',pos:[2.85,.78,1.25],color:'#ffd45a'}
- ];
- function size(){const r=canvas.getBoundingClientRect(),d=window.devicePixelRatio||1;canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0)}
- function project(pt){let [x,y,z]=pt; x-=state.x; y-=state.y; z-=state.z; const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),cp=Math.cos(state.pitch),sp=Math.sin(state.pitch); let dx=cy*x-sy*z, dz=sy*x+cy*z, dy=cp*y-sp*dz; dz=sp*y+cp*dz; if(dz<.08)return null; const w=canvas.clientWidth,h=canvas.clientHeight,s=state.fov/dz; return {x:w/2+dx*s,y:h/2-dy*s,z:dz};}
- function poly(poly,color){const pts=poly.map(project); if(pts.some(p=>!p))return; ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.closePath(); ctx.fillStyle=color; ctx.fill(); ctx.strokeStyle='rgba(126,211,33,.28)'; ctx.stroke();}
- function line(a,b,color='rgba(168,255,42,.8)',wide=2){const A=project(a),B=project(b); if(!A||!B)return; ctx.strokeStyle=color; ctx.lineWidth=wide; ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke();}
- function label(text,pt,color){const p=project(pt); if(!p)return; ctx.fillStyle='rgba(0,0,0,.72)';ctx.strokeStyle=color;ctx.lineWidth=1;ctx.font='700 12px Arial';const m=ctx.measureText(text).width+16;ctx.fillRect(p.x-m/2,p.y-30,m,24);ctx.strokeRect(p.x-m/2,p.y-30,m,24);ctx.fillStyle='#f3f5f2';ctx.textAlign='center';ctx.fillText(text,p.x,p.y-14);ctx.textAlign='start'}
- function cube(cx,cy,cz,w,h,d,color){const x=w/2,y=h/2,z=d/2,pts=[[cx-x,cy-y,cz-z],[cx+x,cy-y,cz-z],[cx+x,cy+y,cz-z],[cx-x,cy+y,cz-z],[cx-x,cy-y,cz+z],[cx+x,cy-y,cz+z],[cx+x,cy+y,cz+z],[cx-x,cy+y,cz+z]],ed=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];ed.forEach(e=>line(pts[e[0]],pts[e[1]],color,2.5))}
- function drawModel(o){if(state.model!=='all'&&state.model!==o.id)return; const [x,y,z]=o.pos,glow=o.color,t=state.spin; line([x-.55,.03,z-.55],[x+.55,.03,z-.55],'rgba(126,211,33,.45)',2);line([x+.55,.03,z-.55],[x+.55,.03,z+.55],'rgba(126,211,33,.45)',2);line([x+.55,.03,z+.55],[x-.55,.03,z+.55],'rgba(126,211,33,.45)',2);line([x-.55,.03,z+.55],[x-.55,.03,z-.55],'rgba(126,211,33,.45)',2); if(o.id==='drone'){cube(x,y,z,.7,.12,.42,glow); [[-.55,-.38],[.55,-.38],[-.55,.38],[.55,.38]].forEach(r=>{line([x,y,z],[x+r[0],y,z+r[1]],glow,3); cube(x+r[0],y,z+r[1],.22,.04,.22,glow)})} if(o.id==='toolcore'){cube(x,y,z,.28,.9,.28,glow);cube(x+.38,y+.18,z,.5,.18,.22,glow);line([x-.15,y+.55,z],[x+.6,y+.55,z],glow,4)} if(o.id==='hydration'){cube(x,y,z,.32,1.05,.32,glow);line([x-.32,y+.55,z],[x+.32,y+.55,z],glow,3);line([x,y-.52,z],[x,y+.72,z],glow,3)} if(o.id==='lamp'){line([x,y-.58,z],[x,y+.42,z],glow,4);cube(x,y+.55,z,.55,.25,.55,glow);line([x-.45,y-.58,z-.45],[x+.45,y-.58,z+.45],glow,2);line([x+.45,y-.58,z-.45],[x-.45,y-.58,z+.45],glow,2)} label(o.label,[x,y+1,z],glow)}
- function draw(){const w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);ctx.fillStyle='#050805';ctx.fillRect(0,0,w,h); walls.slice().sort((a,b)=>avg(b.p)-avg(a.p)).forEach(o=>poly(o.p,o.c)); edges.forEach(e=>line(e[0],e[1])); displays.forEach(drawModel); if(state.avatar){line(avatar[0],avatar[1],'#7ed321',4);line(avatar[3],avatar[2],'#7ed321',4);line(avatar[1],avatar[2],'#7ed321',4);line(avatar[1],avatar[4],'#a8ff2a',4);line(avatar[2],avatar[4],'#a8ff2a',4);} ctx.fillStyle='rgba(126,211,33,.9)';ctx.fillRect(w/2-9,h/2-1,18,2);ctx.fillRect(w/2-1,h/2-9,2,18);}
- function avg(p){return p.reduce((s,q)=>s+(Math.sin(state.yaw)*(q[0]-state.x)+Math.cos(state.yaw)*(q[2]-state.z)),0)/p.length}
- function tick(){state.spin+=.025; const k=state.keys,spd=.055,fx=Math.sin(state.yaw),fz=Math.cos(state.yaw),rx=Math.cos(state.yaw),rz=-Math.sin(state.yaw); if(k.w||k.ArrowUp){state.x+=fx*spd;state.z+=fz*spd} if(k.s||k.ArrowDown){state.x-=fx*spd;state.z-=fz*spd} if(k.a||k.ArrowLeft){state.x-=rx*spd;state.z-=rz*spd} if(k.d||k.ArrowRight){state.x+=rx*spd;state.z+=rz*spd} if(k.q)state.y=Math.max(.8,state.y-.035); if(k.e)state.y=Math.min(2.5,state.y+.035); state.x=Math.max(-4.4,Math.min(4.4,state.x));state.z=Math.max(-4.4,Math.min(4.4,state.z)); draw(); requestAnimationFrame(tick)}
- canvas.addEventListener('pointerdown',e=>{state.drag=true;state.lastX=e.clientX;state.lastY=e.clientY;canvas.setPointerCapture(e.pointerId)}); canvas.addEventListener('pointerup',()=>state.drag=false); canvas.addEventListener('pointermove',e=>{if(!state.drag)return; state.yaw-=(e.clientX-state.lastX)*.006; state.pitch=Math.max(-1.1,Math.min(1.1,state.pitch+(e.clientY-state.lastY)*.004)); state.lastX=e.clientX;state.lastY=e.clientY}); canvas.addEventListener('wheel',e=>{e.preventDefault();state.fov=Math.max(260,Math.min(900,state.fov-e.deltaY*.45))},{passive:false});
- document.addEventListener('keydown',e=>state.keys[e.key.length===1?e.key.toLowerCase():e.key]=true); document.addEventListener('keyup',e=>state.keys[e.key.length===1?e.key.toLowerCase():e.key]=false);
- document.querySelector('#addAvatarBtn')?.addEventListener('click',()=>{state.avatar=!state.avatar}); document.querySelector('#resetTourBtn')?.addEventListener('click',()=>Object.assign(state,{x:0,y:1.65,z:2.8,yaw:Math.PI,pitch:-0.03,fov:520,model:'all'})); document.querySelectorAll('[data-model]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-model]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.model=btn.dataset.model;}));
- document.querySelector('#handControlBtn')?.addEventListener('click',async()=>{try{const stream=await navigator.mediaDevices.getUserMedia({video:true});video.srcObject=stream;await video.play();shell.classList.add('hand-active');state.hand=true;if(window.Hands){const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});hands.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});hands.onResults(r=>{const p=r.multiHandLandmarks?.[0]?.[8]; if(p){state.yaw+=(p.x-.5)*.05;state.pitch=Math.max(-1.1,Math.min(1.1,state.pitch+(p.y-.5)*.035));}});setInterval(()=>state.hand&&hands.send({image:video}),90)}}catch(err){alert('Camera hand control is unavailable in this browser/session. Mouse and keyboard controls still work.')}});
- window.addEventListener('resize',size); size(); tick();
-}
-document.addEventListener('DOMContentLoaded',setupHouseExplorer);
 
 const AR_POP_HEIGHT_FEET = 6;
 const AR_POP_HEIGHT_METERS = 1.8288;
@@ -146,7 +109,7 @@ function getArPlatform(){
 
 function currentPageSnapshot(){
  const title=document.querySelector('h1')?.textContent?.trim() || document.title.replace(/\s*\|\s*IONCORE\s*$/,'') || 'IONCORE Page';
- const desc=document.querySelector('.lead')?.textContent?.trim() || document.querySelector('meta[name="description"]')?.content || 'View this IONCORE page as a six-foot augmented-reality popout.';
+ const desc=document.querySelector('.lead')?.textContent?.trim() || document.querySelector('meta[name="description"]')?.content || 'View this IONCORE page as a floor-scanned augmented-reality model.';
  const hero=document.querySelector('.hero-card img, .pic img, main img, article img, img:not(.logo)');
  return {title,desc,img:hero?.currentSrc || hero?.src || `${window.IONCORE_ASSET_PREFIX || ''}assets/brand/ioncore-logo.svg`,url:location.href};
 }
@@ -178,7 +141,7 @@ function renderArCard(pop,index){
  const data=cards[safeIndex];
  pop.querySelector('.ar-panel-image').src=data.img;
  pop.querySelector('.ar-panel-image').alt=data.title;
- pop.querySelector('.ar-panel-top .badge').textContent=data.badge || 'AR Pop';
+ pop.querySelector('.ar-panel-top .badge').textContent=data.badge || 'AR Page';
  pop.querySelector('.ar-page-panel h2').textContent=data.title;
  pop.querySelector('.ar-page-panel p').textContent=data.desc;
  pop.querySelector('.ar-url').textContent=data.url;
@@ -200,23 +163,23 @@ function ensureArPopout(){
  pop.className='ar-popout';
  pop.setAttribute('role','dialog');
  pop.setAttribute('aria-modal','true');
- pop.setAttribute('aria-label','Six-foot augmented reality page popout');
+ pop.setAttribute('aria-label','Floor-scanned augmented reality page model');
  pop.innerHTML=`<div class="ar-stage">
   <video class="ar-camera" playsinline muted></video>
   <div class="ar-world" aria-hidden="true">
    <div class="ar-floor-grid"></div>
    <div class="ar-scale-person"><span>6 ft</span></div>
    <article class="ar-page-panel">
-    <div class="ar-panel-top"><span class="badge">AR Pop</span><strong>6 ft / 1.83 m</strong></div>
+    <div class="ar-panel-top"><span class="badge">AR Page</span><strong>Floor scan</strong></div>
     <img class="ar-panel-image" alt="">
     <div class="ar-panel-body"><h2></h2><p></p><ul class="ar-panel-features"></ul><div class="ar-url"></div></div>
    </article>
   </div>
-  <div class="ar-toolbar"><button class="btn solid" type="button" id="tryWebXrBtn">Place In Room</button><button class="btn" type="button" id="startArCameraBtn">Camera Preview</button><button class="btn" type="button" id="prevArPageBtn">Prev Page</button><button class="btn" type="button" id="nextArPageBtn">Next Page</button><button class="btn" type="button" id="motionArBtn" hidden>Motion</button><a class="btn ar-quicklook" id="quickLookArBtn" rel="ar" hidden>View In AR</a><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
+  <div class="ar-toolbar"><button class="btn solid" type="button" id="tryWebXrBtn">Scan Floor</button><button class="btn" type="button" id="startArCameraBtn">Open Camera</button><button class="btn" type="button" id="prevArPageBtn">Prev Page</button><button class="btn" type="button" id="nextArPageBtn">Next Page</button><button class="btn" type="button" id="motionArBtn" hidden>Motion</button><a class="btn ar-quicklook" id="quickLookArBtn" rel="ar" hidden>View In AR</a><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
   <div class="ar-placement-dot" aria-hidden="true"></div>
   <div class="ar-page-controls" aria-label="AR page playback controls"><button type="button" id="arPrevHotspot" aria-label="Previous AR page">‹</button><span class="ar-page-count">1 / 1</span><button type="button" id="arNextHotspot" aria-label="Next AR page">›</button></div>
-  <div class="ar-banner" role="status" aria-live="polite"><strong>AR Preview Available</strong><span>Open Camera Preview to play product pages in your space.</span></div>
-  <p class="ar-note">Tap Place In Room on Android Chrome/WebXR. On iPhone, Apple Camera Pop uses the rear camera, touch placement, and motion tilt because Safari does not expose WebXR AR.</p>
+  <div class="ar-banner" role="status" aria-live="polite"><strong>Floor Scan Ready</strong><span>Open the camera, point at the floor, then place this page model in your space.</span></div>
+  <p class="ar-note">Tap Scan Floor. Android Chrome uses WebXR floor detection; iPhone opens the rear camera with touch placement so you can line the page model up on the floor.</p>
  </div>`;
  document.body.appendChild(pop);
  pop.querySelector('#closeArPopBtn').addEventListener('click',closeArPopout);
@@ -257,7 +220,7 @@ function configureArMode(pop,data){
  webXrBtn.hidden=isApple;
  motionBtn.hidden=!isApple || !window.DeviceOrientationEvent?.requestPermission;
  cameraBtn.classList.toggle('solid',isApple);
- banner.innerHTML=isApple ? '<strong>Apple Camera Pop Ready</strong><span>iPhone uses the rear camera preview with touch placement and motion tilt. True WebXR room placement is available on Android Chrome.</span>' : '<strong>AR Preview Available</strong><span>Use WebXR on Android Chrome or Camera Preview on this device.</span>';
+ banner.innerHTML=isApple ? '<strong>iPhone Floor Scan Ready</strong><span>Open the rear camera, scan the floor, then drag or pinch the page model into place.</span>' : '<strong>Floor Scan Ready</strong><span>Use Android Chrome WebXR floor detection, or open the camera preview on this device.</span>';
  quickLook.hidden=true;
  quickLook.removeAttribute('href');
  pop.classList.toggle('apple-ar-fallback',isApple);
@@ -280,9 +243,9 @@ async function startArCamera(){
   video.srcObject=arPopCameraStream;
   await video.play();
   pop.classList.add('camera-on');
-  showArBanner(getArPlatform()==='apple'?'Apple Camera Pop Active':'Camera Preview Active',getArPlatform()==='apple'?'Move your iPhone and drag the card to line it up in the room.':'Camera preview is active; WebXR placement remains available on supported Android Chrome devices.');
+  showArBanner(getArPlatform()==='apple'?'iPhone Floor Scan Active':'Camera Floor Scan Active',getArPlatform()==='apple'?'Point at the floor, then drag and pinch the page model to line it up in the room.':'Camera preview is active; Android Chrome can use WebXR floor placement when supported.');
  }catch(err){
-  showArBanner('Camera Blocked','Allow camera access over HTTPS to use room preview. The six-foot popout still works on screen.');
+  showArBanner('Camera Blocked','Allow camera access over HTTPS to scan the floor. The page model still works on screen.');
  }
 }
 
@@ -313,14 +276,14 @@ function enableAppleArControls(pop){
 }
 
 async function tryWebXrAr(){
- if(isAppleArFallback()){showArBanner('Apple Camera Pop Active','iPhone browsers do not expose WebXR immersive AR, so this uses the best available Apple camera mode.');await startArCamera();return;}
- if(!navigator.xr){showArBanner('Camera Preview Mode Active','WebXR was not found in this browser. Android Chrome supports full room placement.');await startArCamera();return;}
+ if(isAppleArFallback()){showArBanner('iPhone Floor Scan Active','iPhone opens the rear camera with touch placement for the page model.');await startArCamera();return;}
+ if(!navigator.xr){showArBanner('Camera Floor Scan Active','WebXR was not found in this browser. Android Chrome supports floor placement.');await startArCamera();return;}
  try{
   const supported=await navigator.xr.isSessionSupported('immersive-ar');
-  if(!supported){showArBanner('Camera Preview Mode Active','Immersive WebXR AR is not supported here. Try Android Chrome for full room placement.');await startArCamera();return;}
+  if(!supported){showArBanner('Camera Floor Scan Active','Immersive WebXR AR is not supported here. Try Android Chrome for floor placement.');await startArCamera();return;}
   await startRoomArSession();
  }catch(err){
-  showArBanner('Camera Preview Mode Active','Unable to start WebXR here, so the camera preview is showing instead.');
+  showArBanner('Camera Floor Scan Active','Unable to start WebXR here, so the camera preview is showing instead.');
   await startArCamera();
  }
 }
@@ -346,7 +309,7 @@ function makeArTextureCanvas(){
  ctx.fillStyle='rgba(0,0,0,.72)'; ctx.fillRect(0,600,canvas.width,680);
  ctx.fillStyle='#a8ff2a'; ctx.font='800 56px Arial'; wrapCanvasText(ctx,title.toUpperCase(),48,690,canvas.width-96,64,3);
  ctx.fillStyle='#eaffdf'; ctx.font='32px Arial'; wrapCanvasText(ctx,desc,48,910,canvas.width-96,44,6);
- ctx.fillStyle='#7ed321'; ctx.font='700 28px Arial'; ctx.fillText('IONCORE AR • 6 FT ROOM POP',48,1190);
+ ctx.fillStyle='#7ed321'; ctx.font='700 28px Arial'; ctx.fillText('IONCORE AR • FLOOR PAGE MODEL',48,1190);
  return canvas;
 }
 function wrapCanvasText(ctx,text,x,y,maxWidth,lineHeight,maxLines){
@@ -390,13 +353,13 @@ function setupArPopButtons(){
  btn.id='globalArPopBtn';
  btn.className='btn solid ar-floating-btn';
  btn.type='button';
- btn.textContent='AR Pop 6 ft';
- btn.setAttribute('aria-label','Pop this page out as a six-foot augmented reality panel');
+ btn.textContent='Scan Floor AR';
+ btn.setAttribute('aria-label','Scan the floor and open this page as an augmented reality model');
  btn.addEventListener('click',()=>requestArPopout());
  document.body.appendChild(btn);
  document.querySelectorAll('button[onclick^="openProduct("]').forEach(button=>{
   const match=button.getAttribute('onclick')?.match(/openProduct\('([^']+)'\)/);
-  if(match){button.textContent='AR Pop';button.removeAttribute('onclick');button.addEventListener('click',()=>requestArPopout(match[1]));}
+  if(match){button.textContent='Scan Floor';button.removeAttribute('onclick');button.addEventListener('click',()=>requestArPopout(match[1]));}
  });
 }
 
