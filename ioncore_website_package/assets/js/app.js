@@ -151,6 +151,47 @@ function currentPageSnapshot(){
  return {title,desc,img:hero?.currentSrc || hero?.src || `${window.IONCORE_ASSET_PREFIX || ''}assets/brand/ioncore-logo.svg`,url:location.href};
 }
 
+function arCardData(productId){
+ const page=currentPageSnapshot();
+ if(!productId) return {...page,badge:'Current Page',features:[]};
+ const product=PRODUCTS.find(p=>p.id===productId);
+ if(!product) return {...page,badge:'Current Page',features:[]};
+ const productUrl=new URL(`${window.IONCORE_ASSET_PREFIX || ''}products/${product.id}.html`,location.href).href;
+ return {title:product.title,desc:product.desc,img:img(product.id),url:productUrl,badge:product.category,features:product.features || []};
+}
+
+function arPlaylistData(activeProductId){
+ const cards=[arCardData(activeProductId)];
+ const seen=new Set(cards.map(c=>c.url));
+ PRODUCTS.slice(0,12).forEach(product=>{
+  const card=arCardData(product.id);
+  if(!seen.has(card.url)){seen.add(card.url);cards.push(card);}
+ });
+ return cards;
+}
+
+function renderArCard(pop,index){
+ const cards=JSON.parse(pop.dataset.cards || '[]');
+ if(!cards.length) return;
+ const safeIndex=(index+cards.length)%cards.length;
+ pop.dataset.cardIndex=String(safeIndex);
+ const data=cards[safeIndex];
+ pop.querySelector('.ar-panel-image').src=data.img;
+ pop.querySelector('.ar-panel-image').alt=data.title;
+ pop.querySelector('.ar-panel-top .badge').textContent=data.badge || 'AR Pop';
+ pop.querySelector('.ar-page-panel h2').textContent=data.title;
+ pop.querySelector('.ar-page-panel p').textContent=data.desc;
+ pop.querySelector('.ar-url').textContent=data.url;
+ const featureRoot=pop.querySelector('.ar-panel-features');
+ featureRoot.innerHTML=(data.features || []).slice(0,3).map(f=>`<li>${f}</li>`).join('');
+ pop.querySelector('.ar-page-count').textContent=`${safeIndex+1} / ${cards.length}`;
+}
+
+function nextArCard(step=1){
+ const pop=ensureArPopout();
+ renderArCard(pop,Number(pop.dataset.cardIndex || 0)+step);
+}
+
 function ensureArPopout(){
  let pop=document.querySelector('#arPopout');
  if(pop) return pop;
@@ -168,18 +209,24 @@ function ensureArPopout(){
    <article class="ar-page-panel">
     <div class="ar-panel-top"><span class="badge">AR Pop</span><strong>6 ft / 1.83 m</strong></div>
     <img class="ar-panel-image" alt="">
-    <div class="ar-panel-body"><h2></h2><p></p><div class="ar-url"></div></div>
+    <div class="ar-panel-body"><h2></h2><p></p><ul class="ar-panel-features"></ul><div class="ar-url"></div></div>
    </article>
   </div>
-  <div class="ar-toolbar"><button class="btn solid" type="button" id="tryWebXrBtn">Place In Room</button><button class="btn" type="button" id="startArCameraBtn">Camera Preview</button><a class="btn ar-quicklook" id="quickLookArBtn" rel="ar" hidden>View In AR</a><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
+  <div class="ar-toolbar"><button class="btn solid" type="button" id="tryWebXrBtn">Place In Room</button><button class="btn" type="button" id="startArCameraBtn">Camera Preview</button><button class="btn" type="button" id="prevArPageBtn">Prev Page</button><button class="btn" type="button" id="nextArPageBtn">Next Page</button><button class="btn" type="button" id="motionArBtn" hidden>Motion</button><a class="btn ar-quicklook" id="quickLookArBtn" rel="ar" hidden>View In AR</a><button class="btn" type="button" id="closeArPopBtn">Close</button></div>
   <div class="ar-placement-dot" aria-hidden="true"></div>
-  <div class="ar-banner" role="status" aria-live="polite"><strong>AR Preview Available</strong><span>Open Camera Preview to see this product card in your space.</span></div>
+  <div class="ar-page-controls" aria-label="AR page playback controls"><button type="button" id="arPrevHotspot" aria-label="Previous AR page">‹</button><span class="ar-page-count">1 / 1</span><button type="button" id="arNextHotspot" aria-label="Next AR page">›</button></div>
+  <div class="ar-banner" role="status" aria-live="polite"><strong>AR Preview Available</strong><span>Open Camera Preview to play product pages in your space.</span></div>
   <p class="ar-note">Tap Place In Room on Android Chrome/WebXR. On iPhone, Apple Camera Pop uses the rear camera, touch placement, and motion tilt because Safari does not expose WebXR AR.</p>
  </div>`;
  document.body.appendChild(pop);
  pop.querySelector('#closeArPopBtn').addEventListener('click',closeArPopout);
  pop.querySelector('#startArCameraBtn').addEventListener('click',startArCamera);
  pop.querySelector('#tryWebXrBtn').addEventListener('click',tryWebXrAr);
+ pop.querySelector('#prevArPageBtn').addEventListener('click',()=>nextArCard(-1));
+ pop.querySelector('#nextArPageBtn').addEventListener('click',()=>nextArCard(1));
+ pop.querySelector('#arPrevHotspot').addEventListener('click',()=>nextArCard(-1));
+ pop.querySelector('#arNextHotspot').addEventListener('click',()=>nextArCard(1));
+ pop.querySelector('#motionArBtn').addEventListener('click',requestAppleMotion);
  pop.addEventListener('click',e=>{ if(e.target===pop) closeArPopout(); });
  return pop;
 }
@@ -189,17 +236,10 @@ async function requestArPopout(productId){
 }
 
 function openArPopout(productId){
- const product=productId ? PRODUCTS.find(p=>p.id===productId) : null;
- const page=currentPageSnapshot();
- const productUrl=product ? new URL(`${window.IONCORE_ASSET_PREFIX || ''}products/${product.id}.html`, location.href).href : page.url;
- const data=product ? {title:product.title,desc:product.desc,img:img(product.id),url:productUrl} : page;
  const pop=ensureArPopout();
- pop.querySelector('.ar-panel-image').src=data.img;
- pop.querySelector('.ar-panel-image').alt=data.title;
- pop.querySelector('.ar-page-panel h2').textContent=data.title;
- pop.querySelector('.ar-page-panel p').textContent=data.desc;
- pop.querySelector('.ar-url').textContent=data.url;
- configureArMode(pop,data);
+ pop.dataset.cards=JSON.stringify(arPlaylistData(productId));
+ renderArCard(pop,0);
+ configureArMode(pop);
  pop.classList.add('open');
  document.body.classList.add('ar-popout-open');
  if(isAppleArFallback()) startArCamera();
@@ -212,8 +252,10 @@ function configureArMode(pop,data){
  const webXrBtn=pop.querySelector('#tryWebXrBtn');
  const cameraBtn=pop.querySelector('#startArCameraBtn');
  const quickLook=pop.querySelector('#quickLookArBtn');
+ const motionBtn=pop.querySelector('#motionArBtn');
  const banner=pop.querySelector('.ar-banner');
  webXrBtn.hidden=isApple;
+ motionBtn.hidden=!isApple || !window.DeviceOrientationEvent?.requestPermission;
  cameraBtn.classList.toggle('solid',isApple);
  banner.innerHTML=isApple ? '<strong>Apple Camera Pop Ready</strong><span>iPhone uses the rear camera preview with touch placement and motion tilt. True WebXR room placement is available on Android Chrome.</span>' : '<strong>AR Preview Available</strong><span>Use WebXR on Android Chrome or Camera Preview on this device.</span>';
  quickLook.hidden=true;
@@ -244,16 +286,27 @@ async function startArCamera(){
  }
 }
 
+async function requestAppleMotion(){
+ try{
+  if(window.DeviceOrientationEvent?.requestPermission){
+   const state=await DeviceOrientationEvent.requestPermission();
+   showArBanner(state==='granted'?'Motion Tilt Enabled':'Motion Tilt Not Enabled',state==='granted'?'Move your iPhone to add live tilt to the floating page.':'You can still drag, swipe, and pinch the page manually.');
+  }
+ }catch(e){showArBanner('Motion Unavailable','You can still drag, swipe, and pinch the page manually.');}
+}
+
 function enableAppleArControls(pop){
  if(pop.dataset.appleControlsReady) return;
  pop.dataset.appleControlsReady='true';
  const panel=pop.querySelector('.ar-page-panel');
  const stage=pop.querySelector('.ar-stage');
- let drag=false,startX=0,startY=0,tx=0,ty=3,scale=1;
+ let drag=false,startX=0,startY=0,tx=0,ty=3,scale=1,lastTouchDistance=0,swipeX=0;
  function render(){panel.style.setProperty('--arTx',tx+'px');panel.style.setProperty('--arTy',ty+'vh');panel.style.setProperty('--arScale',scale);}
- stage.addEventListener('pointerdown',e=>{if(!isAppleArFallback())return;drag=true;startX=e.clientX-tx;startY=e.clientY-(ty*innerHeight/100);stage.setPointerCapture?.(e.pointerId);});
+ stage.addEventListener('pointerdown',e=>{if(!isAppleArFallback())return;drag=true;swipeX=e.clientX;startX=e.clientX-tx;startY=e.clientY-(ty*innerHeight/100);stage.setPointerCapture?.(e.pointerId);});
  stage.addEventListener('pointermove',e=>{if(!drag)return;tx=e.clientX-startX;ty=((e.clientY-startY)/innerHeight)*100;render();});
- stage.addEventListener('pointerup',()=>{drag=false;});
+ stage.addEventListener('pointerup',e=>{if(drag && Math.abs(e.clientX-swipeX)>80) nextArCard(e.clientX<swipeX?1:-1);drag=false;});
+ stage.addEventListener('touchstart',e=>{if(e.touches.length===2){const [a,b]=e.touches;lastTouchDistance=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}}, {passive:true});
+ stage.addEventListener('touchmove',e=>{if(e.touches.length===2 && lastTouchDistance){const [a,b]=e.touches;const distance=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);scale=Math.max(.68,Math.min(1.5,scale*(distance/lastTouchDistance)));lastTouchDistance=distance;render();}}, {passive:true});
  stage.addEventListener('wheel',e=>{if(!isAppleArFallback())return;e.preventDefault();scale=Math.max(.72,Math.min(1.35,scale-(e.deltaY*.001)));render();},{passive:false});
  window.addEventListener('deviceorientation',e=>{if(!pop.classList.contains('open')||!isAppleArFallback())return;const y=Math.max(-10,Math.min(10,e.gamma||0));const x=Math.max(-8,Math.min(8,e.beta||0));panel.style.setProperty('--arTiltY',y+'deg');panel.style.setProperty('--arTiltX',(-x/2)+'deg');});
  render();
